@@ -27,13 +27,26 @@ function setRow(date, field, value) {
   input.value = value;
   input.dispatchEvent(new w.Event("change", { bubbles: true }));
 }
-setRow("2026-06-01", "in", "09:00");
-setRow("2026-06-01", "out", "18:00");
+// 時と分の選択欄に値を入れる（空の時は両方を空にする）
+function setTime(date, field, hhmm) {
+  const tr = w.document.querySelector(`tr[data-date="${date}"]`);
+  const [h, m] = hhmm ? hhmm.split(":") : ["", ""];
+  const hSel = tr.querySelector(`select[data-k="${field}"][data-part="h"]`);
+  const mSel = tr.querySelector(`select[data-k="${field}"][data-part="m"]`);
+  hSel.value = h;
+  mSel.value = m;
+  hSel.dispatchEvent(new w.Event("change", { bubbles: true }));
+}
+setTime("2026-06-01", "in", "09:00");
+setTime("2026-06-01", "out", "18:00");
 setRow("2026-06-01", "brk", "60");
-setRow("2026-06-02", "in", "09:00");
-setRow("2026-06-02", "out", "20:00");
+setTime("2026-06-02", "in", "09:00");
+setTime("2026-06-02", "out", "20:00");
 setRow("2026-06-02", "brk", "60");
-setRow("2026-06-03", "in", "09:00");
+setTime("2026-06-03", "in", "09:00");
+
+// 時だけ選んだときは分を「00」にする
+assert.strictEqual(w.document.querySelector('tr[data-date="2026-06-03"] select[data-part="m"]').value, "00");
 
 const stored = JSON.parse(w.localStorage.getItem("attendance-v1"));
 assert.deepStrictEqual(stored.days["2026-06-01"], { in: "09:00", out: "18:00", brk: "60" });
@@ -48,7 +61,7 @@ setRow("2026-06-02", "brk", "60分");
 assert.strictEqual(w.localStorage.getItem("attendance-v1").includes('"brk":"60"'), true);
 
 // 空にすると日の記録が消える
-setRow("2026-06-03", "in", "");
+setTime("2026-06-03", "in", "");
 assert.strictEqual(JSON.parse(w.localStorage.getItem("attendance-v1")).days["2026-06-03"], undefined);
 
 console.log("attendance.ui.check.js: all PASS");

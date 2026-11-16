@@ -20,6 +20,7 @@
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   th, td { border-bottom: 1px solid #e1e6dc; padding: 4px 2px; text-align: left; }
   td input { font-size: 14px; padding: 4px; }
+  .tsel select { width: auto; font-size: 15px; padding: 4px 2px; }
   tr.we td { color: #8a4b4b; }
   tr.miss td { background: #fff1e8; }
   .sum { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -161,21 +162,45 @@
       const hours = r.worked ? (r.work / 60).toFixed(2) : "";
       return `<tr class="${cls}" data-date="${date}">
         <td>${Number(date.slice(8))}（${wk[dow]}）</td>
-        <td><input type="time" data-k="in" value="${d.in || ""}"></td>
-        <td><input type="time" data-k="out" value="${d.out || ""}"></td>
+        <td>${timeSelects("in", d.in)}</td>
+        <td>${timeSelects("out", d.out)}</td>
         <td><input type="text" inputmode="numeric" data-k="brk" value="${d.brk || ""}" style="width:64px"></td>
         <td>${hours}</td></tr>`;
     });
     $("rows").innerHTML = rows.join("");
+  }
+  // 時と分を、スクロールで選ぶ2つの欄にする（空の欄は「--」）
+  function timeOpts(n, cur) {
+    let h = '<option value="">--</option>';
+    for (let i = 0; i < n; i++) {
+      const p = pad(i);
+      h += `<option value="${p}"${p === cur ? " selected" : ""}>${p}</option>`;
+    }
+    return h;
+  }
+  function timeSelects(k, hhmm) {
+    const [h, m] = hhmm ? hhmm.split(":") : ["", ""];
+    return `<span class="tsel"><select data-k="${k}" data-part="h" aria-label="時">${timeOpts(24, h)}</select>`
+      + `：<select data-k="${k}" data-part="m" aria-label="分">${timeOpts(60, m)}</select></span>`;
   }
   function onRowChange(ev) {
     const input = ev.target;
     const tr = input.closest("tr");
     if (!tr) return;
     const k = input.dataset.k;
-    let v = input.value.trim();
-    if (k === "brk") {
-      v = v.replace(/[^\d]/g, "");
+    let v;
+    if (input.dataset.part) {
+      // 時か分のどちらかだけ選ばれたら、もう片方は「00」にして表示を保つ
+      const hSel = tr.querySelector(`select[data-k="${k}"][data-part="h"]`);
+      const mSel = tr.querySelector(`select[data-k="${k}"][data-part="m"]`);
+      if (!hSel.value && !mSel.value) v = "";
+      else {
+        if (!hSel.value) hSel.value = "00";
+        if (!mSel.value) mSel.value = "00";
+        v = `${hSel.value}:${mSel.value}`;
+      }
+    } else {
+      v = input.value.trim().replace(/[^\d]/g, "");
     }
     if (!setDay(tr.dataset.date, { [k]: v })) alert("保存できませんでした。");
     renderMonth();
