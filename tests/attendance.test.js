@@ -55,6 +55,12 @@ assert.ok(line.startsWith("山田 太郎 2026年6月分 勤怠"));
 assert.ok(line.includes("支給見込み 22,200円"));
 assert.ok(line.includes("6/2（火） 09:00〜20:00 休憩60分 実働10時間"));
 assert.ok(!/[#*|]/.test(line));
+// 出勤なしの印：未入力扱いにならず、CSVとLINE文に「出勤なし」と出る
+const withNone = Object.assign({}, days, { "2026-06-04": { none: true } });
+assert.deepStrictEqual(A.monthSummary(withNone, ym).missing, ["2026-06-03"]);
+assert.ok(A.toCsv(withNone, "2026-06").includes("2026-06-04,木,出勤なし,,,,"));
+assert.ok(A.toLineText("山田 太郎", withNone, "2026-06", "").includes("6/4（木） 出勤なし"));
+
 // 記録のない日も日付だけ出る（6月は30日まで）
 assert.ok(line.includes("6/30（火）"));
 assert.strictEqual(line.split("\n").filter((l) => /^6\/\d+（/.test(l)).length, 30);

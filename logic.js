@@ -13,6 +13,7 @@
 
   // 1日の実働・時間外（分）。退勤が出勤より前なら翌日の退勤とみなす（深夜勤務）
   function dayWork(d) {
+    if (d && d.none) return { worked: false, work: 0, ot: 0, missing: false, none: true };
     const inM = toMin(d && d.in);
     const outM = toMin(d && d.out);
     if (inM === null || outM === null) return { worked: false, work: 0, ot: 0, missing: inM !== null || outM !== null };
@@ -55,7 +56,7 @@
       const r = dayWork(d);
       const w = wk[new Date(date + "T00:00:00").getDay()];
       lines.push([
-        date, w, d.in || "", d.out || "", d.brk || "",
+        date, w, d.none ? "出勤なし" : (d.in || ""), d.none ? "" : (d.out || ""), d.none ? "" : (d.brk || ""),
         r.worked ? round2(r.work / 60) : "", r.worked ? round2(r.ot / 60) : ""
       ].join(","));
     }

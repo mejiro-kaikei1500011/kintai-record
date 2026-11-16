@@ -64,6 +64,13 @@ assert.strictEqual(w.localStorage.getItem("attendance-v1").includes('"brk":"60"'
 setTime("2026-06-03", "in", "");
 assert.strictEqual(JSON.parse(w.localStorage.getItem("attendance-v1")).days["2026-06-03"], undefined);
 
+// 出勤なしの印を付けると保存され、もう一度押すと取り消せる
+w.document.querySelector('tr[data-date="2026-06-04"] .noneBtn').click();
+assert.strictEqual(JSON.parse(w.localStorage.getItem("attendance-v1")).days["2026-06-04"].none, true);
+assert.strictEqual(w.document.querySelector('tr[data-date="2026-06-04"] .noneBtn').textContent, "取消");
+w.document.querySelector('tr[data-date="2026-06-04"] .noneBtn').click();
+assert.strictEqual(JSON.parse(w.localStorage.getItem("attendance-v1")).days["2026-06-04"], undefined);
+
 // 時給を入れると、支給見込みとLINE用の文章に反映される
 $("hourly").value = "1200";
 $("hourly").dispatchEvent(new w.Event("change"));
