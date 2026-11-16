@@ -39,7 +39,7 @@
     <label>お名前（CSVのファイル名に使います）
       <input id="name" type="text" placeholder="例：山田 太郎" autocomplete="off">
     </label>
-    <p class="note">記録はこの端末のブラウザの中にだけ保存されます。月末に「CSVを書き出す」で必ず書き出し、事務所へ送ってください。端末の変更やブラウザの履歴削除で消えることがあります。</p>
+    <p class="note">記録はこの端末のブラウザの中にだけ保存されます。月末に下の「LINEに送る文章」をコピーして、事務所へ送ってください。端末の変更やブラウザの履歴削除で消えることがあります。</p>
   </section>
 
   <section>
@@ -69,12 +69,9 @@
     <p id="missMsg" class="warn"></p>
     <div style="overflow-x:auto">
       <table>
-        <thead><tr><th>日</th><th>出勤</th><th>退勤</th><th>休憩(分)</th><th>実働</th></tr></thead>
+        <thead><tr><th>日</th><th>出勤</th><th>退勤</th><th>休憩(分)</th><th>実働</th><th></th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
-    </div>
-    <div class="btns">
-      <button id="csvBtn" class="btn sub" type="button">CSVを書き出す（事務所へ送る用）</button>
     </div>
     <p class="note">時間は「09:00」の形で入力してください。退勤が出勤より前の時刻のときは、深夜をまたぐ勤務として計算します。</p>
   </section>
@@ -122,7 +119,7 @@
   function dayOf(date) { return db.days[date] || {}; }
   function setDay(date, patch) {
     const cur = Object.assign({}, dayOf(date), patch);
-    if (!cur.in && !cur.out && !cur.brk) delete db.days[date];
+    if (!cur.in && !cur.out && !cur.brk && !cur.none) delete db.days[date];
     else db.days[date] = cur;
     return save();
   }
@@ -180,12 +177,14 @@
       const dow = new Date(date + "T00:00:00").getDay();
       const cls = [dow === 0 || dow === 6 ? "we" : "", r.missing ? "miss" : ""].join(" ").trim();
       const hours = r.worked ? (r.work / 60).toFixed(2) : "";
+      const isNone = !!d.none;
       return `<tr class="${cls}" data-date="${date}">
         <td>${Number(date.slice(8))}（${wk[dow]}）</td>
-        <td>${timeSelects("in", d.in)}</td>
-        <td>${timeSelects("out", d.out)}</td>
-        <td><input type="text" inputmode="numeric" data-k="brk" value="${d.brk || ""}" style="width:64px"></td>
-        <td>${hours}</td></tr>`;
+        <td>${isNone ? "出勤なし" : timeSelects("in", d.in, false)}</td>
+        <td>${isNone ? "" : timeSelects("out", d.out, false)}</td>
+        <td><input type="text" inputmode="numeric" data-k="brk" value="${d.brk || ""}" style="width:64px"${isNone ? " disabled" : ""}></td>
+        <td>${hours}</td>
+        <td><button type="button" class="noneBtn">${isNone ? "取消" : "出勤なし"}</button></td></tr>`;
     });
     $("rows").innerHTML = rows.join("");
   }
@@ -198,10 +197,11 @@
     }
     return h;
   }
-  function timeSelects(k, hhmm) {
+  function timeSelects(k, hhmm, disabled) {
     const [h, m] = hhmm ? hhmm.split(":") : ["", ""];
-    return `<span class="tsel"><select data-k="${k}" data-part="h" aria-label="時">${timeOpts(24, h)}</select>`
-      + `：<select data-k="${k}" data-part="m" aria-label="分">${timeOpts(60, m)}</select></span>`;
+    const dis = disabled ? " disabled" : "";
+    return `<span class="tsel"><select data-k="${k}" data-part="h" aria-label="時"${dis}>${timeOpts(24, h)}</select>`
+      + `：<select data-k="${k}" data-part="m" aria-label="分"${dis}>${timeOpts(60, m)}</select></span>`;
   }
   function onRowChange(ev) {
     const input = ev.target;
@@ -240,23 +240,6 @@
     }
   }
 
-  // CSVの書き出し
-  function exportCsv() {
-    const ym = monthValue();
-    if (!ym) { alert("対象月を選んでください。"); return; }
-    const name = (db.name || "").trim() || "名前未入力";
-    const s = L.monthSummary(db.days, ym);
-    if (s.missing.length && !confirm(`出勤か退勤が未入力の日が${s.missing.length}日あります。このまま書き出しますか？`)) return;
-    const csv = L.toCsv(db.days, ym);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `勤怠_${name}_${ym.replace("-", "")}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  }
 
   function init() {
     $("name").value = db.name || "";
@@ -268,6 +251,16 @@
       renderMonth();
     });
     $("copyLineBtn").addEventListener("click", copyLine);
+    // 出勤なしの印を付ける・取り消す（印を付けると、その日の時刻と休憩は消える）
+    $("rows").addEventListener("click", (ev) => {
+      const b = ev.target.closest(".noneBtn");
+      if (!b) return;
+      const date = b.closest("tr").dataset.date;
+      const ok = setDay(date, dayOf(date).none ? { none: false } : { none: true, in: "", out: "", brk: "" });
+      if (!ok) alert("保存できませんでした。");
+      renderMonth();
+      renderToday();
+    });
     $("name").addEventListener("change", () => { db.name = $("name").value.trim(); save(); });
     const now = new Date();
     $("month").value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
@@ -281,7 +274,6 @@
       renderMonth();
     });
     $("rows").addEventListener("change", onRowChange);
-    $("csvBtn").addEventListener("click", exportCsv);
     renderToday();
     renderMonth();
   }
