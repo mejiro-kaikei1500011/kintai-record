@@ -48,6 +48,11 @@ assert.strictEqual(pay.normal, 19200);
 assert.strictEqual(pay.overtime, 3000);
 assert.strictEqual(pay.total, 22200);
 assert.strictEqual(A.payOf("", s).total, 0);
+// 交通費は合計に足す（時給の計算とは別に表示）
+assert.strictEqual(A.payOf("1200", s, "500").total, 22700);
+assert.strictEqual(A.payOf("1200", s, "500").transport, 500);
+assert.ok(A.toLineText("山田 太郎", days, "2026-06", "1200", "500").includes("交通費 500円"));
+assert.ok(!A.toLineText("山田 太郎", days, "2026-06", "1200", "").includes("交通費"));
 
 // LINE用の文章：記号の装飾なし、支給見込みを含む
 const line = A.toLineText("山田 太郎", days, "2026-06", "1200");

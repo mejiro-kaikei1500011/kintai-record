@@ -59,6 +59,12 @@ assert.strictEqual(w.localStorage.getItem("attendance-v1").includes('"brk":"60"'
 setTime("2026-06-03", "in", "");
 assert.strictEqual(JSON.parse(w.localStorage.getItem("attendance-v1")).days["2026-06-03"], undefined);
 
+// 交通費（月の合計）は、その月に保存され、LINE文に出る
+$("transport").value = "500";
+$("transport").dispatchEvent(new w.Event("change"));
+assert.strictEqual(JSON.parse(w.localStorage.getItem("attendance-v1")).transport["2026-06"], "500");
+assert.ok($("lineText").value.includes("交通費 500円"));
+
 // 時給を入れると、支給見込みとLINE用の文章に反映される
 $("hourly").value = "1200";
 $("hourly").dispatchEvent(new w.Event("change"));

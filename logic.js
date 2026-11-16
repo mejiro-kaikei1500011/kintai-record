@@ -64,18 +64,20 @@
   }
 
   // 支給額の概算（時給×時間。時間外は割増1.25倍）。社会保険料・税金は引かない
-  function payOf(hourly, s) {
+  // 交通費は月の合計を足す（税金・社会保険料の計算には含めない）
+  function payOf(hourly, s, transport) {
     const h = Number(String(hourly || "").replace(/,/g, "")) || 0;
+    const t = Number(String(transport || "").replace(/,/g, "")) || 0;
     const normalMin = s.workMin - s.otMin;
     const normal = Math.round(h * normalMin / 60);
     const overtime = Math.round(h * 1.25 * s.otMin / 60);
-    return { hourly: h, normal, overtime, total: normal + overtime };
+    return { hourly: h, normal, overtime, transport: t, total: normal + overtime + t };
   }
 
   // LINEに貼り付ける用の文章（記号の装飾なし、1日1行）
-  function toLineText(name, days, ym, hourly) {
+  function toLineText(name, days, ym, hourly, transport) {
     const s = monthSummary(days, ym);
-    const p = payOf(hourly, s);
+    const p = payOf(hourly, s, transport);
     const [y, m] = ym.split("-").map(Number);
     const wk = ["日", "月", "火", "水", "木", "金", "土"];
     const out = [];
@@ -86,6 +88,9 @@
     if (p.hourly > 0) {
       out.push(`時給 ${p.hourly.toLocaleString("ja-JP")}円`);
       out.push(`所定内 ${p.normal.toLocaleString("ja-JP")}円 ／ 時間外 ${p.overtime.toLocaleString("ja-JP")}円`);
+    }
+    if (p.transport > 0) out.push(`交通費 ${p.transport.toLocaleString("ja-JP")}円`);
+    if (p.hourly > 0 || p.transport > 0) {
       out.push(`支給見込み ${p.total.toLocaleString("ja-JP")}円（税金・社会保険料は含みません）`);
     }
     if (s.missing.length) {

@@ -65,7 +65,8 @@
       <div>時間外の支給<b id="payOt">--</b></div>
       <div>支給見込み（合計）<b id="payTotal">--</b></div>
     </div>
-    <p class="note">時給×時間で計算した概算です。時間外は1.25倍、税金・社会保険料・深夜割増は含みません。</p>
+    <label>交通費（この月の合計・円）<input id="transport" type="text" inputmode="numeric" placeholder="例：2400"></label>
+    <p class="note">時給×時間で計算した概算です。時間外は1.25倍、交通費を足しています。税金・社会保険料・深夜割増は含みません。</p>
     <p id="missMsg" class="warn"></p>
     <div style="overflow-x:auto">
       <table>
@@ -100,7 +101,7 @@
       const d = JSON.parse(localStorage.getItem(KEY));
       if (d && typeof d.days === "object") return d;
     } catch (e) { /* 壊れていたら空から */ }
-    return { name: "", days: {}, hourly: "" };
+    return { name: "", days: {}, hourly: "", transport: {} };
   }
   let db = load();
   function save() {
@@ -156,6 +157,10 @@
 
   // 月の表
   function monthValue() { return $("month").value; }
+  // 交通費は月ごとの合計（円）。db.transport に月の値で保存する
+  function monthTransport(ym) {
+    return (db.transport && db.transport[ym]) || "";
+  }
   function renderMonth() {
     const ym = monthValue();
     if (!ym) return;
@@ -164,11 +169,13 @@
     $("sumHours").textContent = s.hours;
     $("sumOt").textContent = s.otHours;
     $("sumMiss").textContent = s.missing.length;
-    const p = L.payOf(db.hourly, s);
+    const tr = monthTransport(ym);
+    $("transport").value = tr || "";
+    const p = L.payOf(db.hourly, s, tr);
     $("payNormal").textContent = p.hourly ? p.normal.toLocaleString("ja-JP") + "円" : "時給未入力";
     $("payOt").textContent = p.hourly ? p.overtime.toLocaleString("ja-JP") + "円" : "--";
-    $("payTotal").textContent = p.hourly ? p.total.toLocaleString("ja-JP") + "円" : "--";
-    $("lineText").value = L.toLineText(db.name, db.days, ym, db.hourly);
+    $("payTotal").textContent = p.hourly || tr ? p.total.toLocaleString("ja-JP") + "円" : "--";
+    $("lineText").value = L.toLineText(db.name, db.days, ym, db.hourly, tr);
     $("missMsg").textContent = s.missing.length ? `出勤か退勤が未入力の日があります：${s.missing.map((d) => d.slice(8)).join("、")}日` : "";
     const wk = ["日", "月", "火", "水", "木", "金", "土"];
     const rows = L.datesOf(ym).map((date) => {
@@ -225,6 +232,16 @@
       renderMonth();
     });
     $("copyLineBtn").addEventListener("click", copyLine);
+    $("transport").addEventListener("change", () => {
+      const ym = monthValue();
+      const v = $("transport").value.trim().replace(/[^\d]/g, "");
+      db.transport = db.transport || {};
+      if (v) db.transport[ym] = v;
+      else delete db.transport[ym];
+      $("transport").value = v;
+      save();
+      renderMonth();
+    });
     $("name").addEventListener("change", () => { db.name = $("name").value.trim(); save(); });
     const now = new Date();
     $("month").value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
