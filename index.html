@@ -20,7 +20,7 @@
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   th, td { border-bottom: 1px solid #e1e6dc; padding: 4px 2px; text-align: left; }
   td input { font-size: 14px; padding: 4px; }
-  .tsel select { width: auto; font-size: 15px; padding: 4px 2px; }
+  td input[type=time] { font-size: 16px; padding: 6px 4px; width: 118px; }
   tr.we td { color: #8a4b4b; }
   tr.miss td { background: #fff1e8; }
   .sum { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -69,7 +69,7 @@
     <p id="missMsg" class="warn"></p>
     <div style="overflow-x:auto">
       <table>
-        <thead><tr><th>日</th><th>出勤</th><th>退勤</th><th>休憩(分)</th><th>実働</th><th></th></tr></thead>
+        <thead><tr><th>日</th><th>出勤</th><th>退勤</th><th>休憩(分)</th><th>実働</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
@@ -177,51 +177,25 @@
       const dow = new Date(date + "T00:00:00").getDay();
       const cls = [dow === 0 || dow === 6 ? "we" : "", r.missing ? "miss" : ""].join(" ").trim();
       const hours = r.worked ? (r.work / 60).toFixed(2) : "";
-      const isNone = !!d.none;
       return `<tr class="${cls}" data-date="${date}">
         <td>${Number(date.slice(8))}（${wk[dow]}）</td>
-        <td>${isNone ? "出勤なし" : timeSelects("in", d.in, false)}</td>
-        <td>${isNone ? "" : timeSelects("out", d.out, false)}</td>
-        <td><input type="text" inputmode="numeric" data-k="brk" value="${d.brk || ""}" style="width:64px"${isNone ? " disabled" : ""}></td>
-        <td>${hours}</td>
-        <td><button type="button" class="noneBtn">${isNone ? "取消" : "出勤なし"}</button></td></tr>`;
+        <td>${timeInput("in", d.in)}</td>
+        <td>${timeInput("out", d.out)}</td>
+        <td><input type="text" inputmode="numeric" data-k="brk" value="${d.brk || ""}" style="width:64px"></td>
+        <td>${hours}</td></tr>`;
     });
     $("rows").innerHTML = rows.join("");
   }
-  // 時と分を、スクロールで選ぶ2つの欄にする（空の欄は「--」）
-  function timeOpts(n, cur) {
-    let h = '<option value="">--</option>';
-    for (let i = 0; i < n; i++) {
-      const p = pad(i);
-      h += `<option value="${p}"${p === cur ? " selected" : ""}>${p}</option>`;
-    }
-    return h;
-  }
-  function timeSelects(k, hhmm, disabled) {
-    const [h, m] = hhmm ? hhmm.split(":") : ["", ""];
-    const dis = disabled ? " disabled" : "";
-    return `<span class="tsel"><select data-k="${k}" data-part="h" aria-label="時"${dis}>${timeOpts(24, h)}</select>`
-      + `：<select data-k="${k}" data-part="m" aria-label="分"${dis}>${timeOpts(60, m)}</select></span>`;
+  // 時刻は、スマホの標準の時刻入力（時と分をスクロールで選ぶ）。5分刻み
+  function timeInput(k, hhmm) {
+    return `<input type="time" step="300" data-k="${k}" value="${hhmm || ""}">`;
   }
   function onRowChange(ev) {
     const input = ev.target;
     const tr = input.closest("tr");
     if (!tr) return;
     const k = input.dataset.k;
-    let v;
-    if (input.dataset.part) {
-      // 時か分のどちらかだけ選ばれたら、もう片方は「00」にして表示を保つ
-      const hSel = tr.querySelector(`select[data-k="${k}"][data-part="h"]`);
-      const mSel = tr.querySelector(`select[data-k="${k}"][data-part="m"]`);
-      if (!hSel.value && !mSel.value) v = "";
-      else {
-        if (!hSel.value) hSel.value = "00";
-        if (!mSel.value) mSel.value = "00";
-        v = `${hSel.value}:${mSel.value}`;
-      }
-    } else {
-      v = input.value.trim().replace(/[^\d]/g, "");
-    }
+    const v = k === "brk" ? input.value.trim().replace(/[^\d]/g, "") : input.value;
     if (!setDay(tr.dataset.date, { [k]: v })) alert("保存できませんでした。");
     renderMonth();
     renderToday();
@@ -251,16 +225,6 @@
       renderMonth();
     });
     $("copyLineBtn").addEventListener("click", copyLine);
-    // 出勤なしの印を付ける・取り消す（印を付けると、その日の時刻と休憩は消える）
-    $("rows").addEventListener("click", (ev) => {
-      const b = ev.target.closest(".noneBtn");
-      if (!b) return;
-      const date = b.closest("tr").dataset.date;
-      const ok = setDay(date, dayOf(date).none ? { none: false } : { none: true, in: "", out: "", brk: "" });
-      if (!ok) alert("保存できませんでした。");
-      renderMonth();
-      renderToday();
-    });
     $("name").addEventListener("change", () => { db.name = $("name").value.trim(); save(); });
     const now = new Date();
     $("month").value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;

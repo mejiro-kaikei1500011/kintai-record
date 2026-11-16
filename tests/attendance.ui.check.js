@@ -30,12 +30,9 @@ function setRow(date, field, value) {
 // 時と分の選択欄に値を入れる（空の時は両方を空にする）
 function setTime(date, field, hhmm) {
   const tr = w.document.querySelector(`tr[data-date="${date}"]`);
-  const [h, m] = hhmm ? hhmm.split(":") : ["", ""];
-  const hSel = tr.querySelector(`select[data-k="${field}"][data-part="h"]`);
-  const mSel = tr.querySelector(`select[data-k="${field}"][data-part="m"]`);
-  hSel.value = h;
-  mSel.value = m;
-  hSel.dispatchEvent(new w.Event("change", { bubbles: true }));
+  const input = tr.querySelector(`input[type="time"][data-k="${field}"]`);
+  input.value = hhmm;
+  input.dispatchEvent(new w.Event("change", { bubbles: true }));
 }
 setTime("2026-06-01", "in", "09:00");
 setTime("2026-06-01", "out", "18:00");
@@ -45,8 +42,6 @@ setTime("2026-06-02", "out", "20:00");
 setRow("2026-06-02", "brk", "60");
 setTime("2026-06-03", "in", "09:00");
 
-// 時だけ選んだときは分を「00」にする
-assert.strictEqual(w.document.querySelector('tr[data-date="2026-06-03"] select[data-part="m"]').value, "00");
 
 const stored = JSON.parse(w.localStorage.getItem("attendance-v1"));
 assert.deepStrictEqual(stored.days["2026-06-01"], { in: "09:00", out: "18:00", brk: "60" });
@@ -63,13 +58,6 @@ assert.strictEqual(w.localStorage.getItem("attendance-v1").includes('"brk":"60"'
 // 空にすると日の記録が消える
 setTime("2026-06-03", "in", "");
 assert.strictEqual(JSON.parse(w.localStorage.getItem("attendance-v1")).days["2026-06-03"], undefined);
-
-// 出勤なしの印を付けると保存され、もう一度押すと取り消せる
-w.document.querySelector('tr[data-date="2026-06-04"] .noneBtn').click();
-assert.strictEqual(JSON.parse(w.localStorage.getItem("attendance-v1")).days["2026-06-04"].none, true);
-assert.strictEqual(w.document.querySelector('tr[data-date="2026-06-04"] .noneBtn').textContent, "取消");
-w.document.querySelector('tr[data-date="2026-06-04"] .noneBtn').click();
-assert.strictEqual(JSON.parse(w.localStorage.getItem("attendance-v1")).days["2026-06-04"], undefined);
 
 // 時給を入れると、支給見込みとLINE用の文章に反映される
 $("hourly").value = "1200";
