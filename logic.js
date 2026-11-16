@@ -93,15 +93,17 @@
     out.push("");
     for (const date of datesOf(ym)) {
       const d = (days || {})[date] || {};
-      if (!d.in && !d.out) continue;
+      // 記録がない日も、日付だけ1行出す
       const dd = new Date(date + "T00:00:00");
       const head = `${dd.getMonth() + 1}/${dd.getDate()}（${wk[dd.getDay()]}）`;
       if (d.in && d.out) {
         const r = dayWork(d);
         const brk = Number(d.brk) > 0 ? ` 休憩${Number(d.brk)}分` : "";
         out.push(`${head} ${d.in}〜${d.out}${brk} 実働${round2(r.work / 60)}時間`);
-      } else {
+      } else if (d.in || d.out) {
         out.push(`${head} ${d.in ? "出勤 " + d.in : "退勤 " + d.out}（未入力あり）`);
+      } else {
+        out.push(head);
       }
     }
     return out.join("\n");
