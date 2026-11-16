@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>勤怠記録（打刻・月次集計）</title>
+<style>
+  body { font-family: "Hiragino Sans", "Yu Gothic", sans-serif; margin: 0; background: #f4f6f2; color: #222; font-size: 16px; }
+  header { background: #3f5b3a; color: #fff; padding: 12px 16px; font-weight: bold; }
+  main { padding: 12px; max-width: 720px; margin: 0 auto; }
+  section { background: #fff; border: 1px solid #c9d3c4; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+  h2 { font-size: 17px; margin: 0 0 10px; color: #3f5b3a; }
+  label { display: block; margin: 6px 0; }
+  input, select { font-size: 16px; padding: 8px; border: 1px solid #7a8a70; border-radius: 6px; width: 100%; box-sizing: border-box; }
+  .btns { display: flex; gap: 10px; margin: 10px 0; }
+  .btn { flex: 1; font-size: 20px; padding: 16px 8px; border: none; border-radius: 8px; color: #fff; background: #3f5b3a; font-weight: bold; }
+  .btn.sub { background: #5d7a57; font-size: 15px; padding: 10px; }
+  .btn.out { background: #8a5a2b; }
+  .btn:disabled { background: #aab4a3; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { border-bottom: 1px solid #e1e6dc; padding: 4px 2px; text-align: left; }
+  td input { font-size: 14px; padding: 4px; }
+  tr.we td { color: #8a4b4b; }
+  tr.miss td { background: #fff1e8; }
+  .sum { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .sum div { background: #f0f4ec; border-radius: 6px; padding: 8px; }
+  .sum b { display: block; font-size: 20px; }
+  .warn { color: #b00020; font-weight: bold; }
+  .note { font-size: 13px; color: #555; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<header>勤怠記録</header>
+<main>
+
+  <section>
+    <label>お名前（CSVのファイル名に使います）
+      <input id="name" type="text" placeholder="例：山田 太郎" autocomplete="off">
+    </label>
+    <p class="note">記録はこの端末のブラウザの中にだけ保存されます。月末に「CSVを書き出す」で必ず書き出し、事務所へ送ってください。端末の変更やブラウザの履歴削除で消えることがあります。</p>
+  </section>
+
+  <section>
+    <h2>今日の打刻 <span id="todayLabel"></span></h2>
+    <div class="btns">
+      <button id="inBtn" class="btn" type="button">出勤</button>
+      <button id="outBtn" class="btn out" type="button">退勤</button>
+    </div>
+    <label>今日の休憩時間（分）<input id="todayBrk" type="text" inputmode="numeric" placeholder="0"></label>
+    <p id="todayMsg" class="note"></p>
+  </section>
+
+  <section>
+    <h2>月ごとの記録と集計</h2>
+    <label>対象月<input id="month" type="month"></label>
+    <div class="sum" style="margin:10px 0">
+      <div>出勤日数<b id="sumDays">0</b></div>
+      <div>労働時間<b id="sumHours">0</b></div>
+      <div>時間外（1日8時間超）<b id="sumOt">0</b></div>
+      <div>未入力の日<b id="sumMiss">0</b></div>
+    </div>
+    <p id="missMsg" class="warn"></p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>日</th><th>出勤</th><th>退勤</th><th>休憩(分)</th><th>実働</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="btns">
+      <button id="csvBtn" class="btn sub" type="button">CSVを書き出す（事務所へ送る用）</button>
+    </div>
+    <p class="note">時間は「09:00」の形で入力してください。退勤が出勤より前の時刻のときは、深夜をまたぐ勤務として計算します。</p>
+  </section>
+
+</main>
+<script src="logic.js"></script>
+<script>
+(function () {
+  "use strict";
+  const L = window.AttendanceLogic;
+  const KEY = "attendance-v1";
+  const $ = (id) => document.getElementById(id);
+
+  function load() {
+    try {
+      const d = JSON.parse(localStorage.getItem(KEY));
+      if (d && typeof d.days === "object") return d;
+    } catch (e) { /* 壊れていたら空から */ }
+    return { name: "", days: {} };
+  }
+  let db = load();
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(db)); return true; }
+    catch (e) { return false; }
+  }
+  function pad(n) { return String(n).padStart(2, "0"); }
+  function todayStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+  function nowHM() {
+    const d = new Date();
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  function dayOf(date) { return db.days[date] || {}; }
+  function setDay(date, patch) {
+    const cur = Object.assign({}, dayOf(date), patch);
+    if (!cur.in && !cur.out && !cur.brk) delete db.days[date];
+    else db.days[date] = cur;
+    return save();
+  }
+
+  // 今日の打刻
+  function renderToday() {
+    const t = todayStr();
+    const d = dayOf(t);
+    $("todayLabel").textContent = t.replace(/-/g, "/");
+    $("todayBrk").value = d.brk || "";
+    const parts = [];
+    if (d.in) parts.push(`出勤 ${d.in}`);
+    if (d.out) parts.push(`退勤 ${d.out}`);
+    $("todayMsg").textContent = parts.length ? parts.join("　") : "まだ打刻していません。";
+    $("inBtn").disabled = false;
+    $("outBtn").disabled = false;
+  }
+  function punch(kind) {
+    const t = todayStr();
+    const now = nowHM();
+    if (kind === "in") {
+      const ok = setDay(t, { in: now, out: "" });
+      if (!ok) alert("保存できませんでした。ブラウザの保存領域が使えない設定かもしれません。");
+    } else {
+      if (!dayOf(t).in) {
+        if (!confirm("今日はまだ出勤が記録されていません。退勤の時刻だけを記録しますか？")) return;
+      }
+      const ok = setDay(t, { out: now });
+      if (!ok) alert("保存できませんでした。");
+    }
+    renderToday();
+    renderMonth();
+  }
+
+  // 月の表
+  function monthValue() { return $("month").value; }
+  function renderMonth() {
+    const ym = monthValue();
+    if (!ym) return;
+    const s = L.monthSummary(db.days, ym);
+    $("sumDays").textContent = s.days;
+    $("sumHours").textContent = s.hours;
+    $("sumOt").textContent = s.otHours;
+    $("sumMiss").textContent = s.missing.length;
+    $("missMsg").textContent = s.missing.length ? `出勤か退勤が未入力の日があります：${s.missing.map((d) => d.slice(8)).join("、")}日` : "";
+    const wk = ["日", "月", "火", "水", "木", "金", "土"];
+    const rows = L.datesOf(ym).map((date) => {
+      const d = dayOf(date);
+      const r = L.dayWork(d);
+      const dow = new Date(date + "T00:00:00").getDay();
+      const cls = [dow === 0 || dow === 6 ? "we" : "", r.missing ? "miss" : ""].join(" ").trim();
+      const hours = r.worked ? (r.work / 60).toFixed(2) : "";
+      return `<tr class="${cls}" data-date="${date}">
+        <td>${Number(date.slice(8))}（${wk[dow]}）</td>
+        <td><input type="time" data-k="in" value="${d.in || ""}"></td>
+        <td><input type="time" data-k="out" value="${d.out || ""}"></td>
+        <td><input type="text" inputmode="numeric" data-k="brk" value="${d.brk || ""}" style="width:64px"></td>
+        <td>${hours}</td></tr>`;
+    });
+    $("rows").innerHTML = rows.join("");
+  }
+  function onRowChange(ev) {
+    const input = ev.target;
+    const tr = input.closest("tr");
+    if (!tr) return;
+    const k = input.dataset.k;
+    let v = input.value.trim();
+    if (k === "brk") {
+      v = v.replace(/[^\d]/g, "");
+    }
+    if (!setDay(tr.dataset.date, { [k]: v })) alert("保存できませんでした。");
+    renderMonth();
+    renderToday();
+  }
+
+  // CSVの書き出し
+  function exportCsv() {
+    const ym = monthValue();
+    if (!ym) { alert("対象月を選んでください。"); return; }
+    const name = (db.name || "").trim() || "名前未入力";
+    const s = L.monthSummary(db.days, ym);
+    if (s.missing.length && !confirm(`出勤か退勤が未入力の日が${s.missing.length}日あります。このまま書き出しますか？`)) return;
+    const csv = L.toCsv(db.days, ym);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `勤怠_${name}_${ym.replace("-", "")}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  function init() {
+    $("name").value = db.name || "";
+    $("name").addEventListener("change", () => { db.name = $("name").value.trim(); save(); });
+    const now = new Date();
+    $("month").value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+    $("month").addEventListener("change", renderMonth);
+    $("inBtn").addEventListener("click", () => punch("in"));
+    $("outBtn").addEventListener("click", () => punch("out"));
+    $("todayBrk").addEventListener("change", () => {
+      const v = $("todayBrk").value.trim().replace(/[^\d]/g, "");
+      if (!setDay(todayStr(), { brk: v })) alert("保存できませんでした。");
+      renderToday();
+      renderMonth();
+    });
+    $("rows").addEventListener("change", onRowChange);
+    $("csvBtn").addEventListener("click", exportCsv);
+    renderToday();
+    renderMonth();
+  }
+  document.addEventListener("DOMContentLoaded", init);
+})();
+</script>
+</body>
+</html>
