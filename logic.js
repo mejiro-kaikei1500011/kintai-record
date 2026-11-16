@@ -62,7 +62,52 @@
     return "﻿" + lines.join("\r\n") + "\r\n";
   }
 
-  const api = { toMin, dayWork, datesOf, monthSummary, toCsv, STD_MIN };
+  // 支給額の概算（時給×時間。時間外は割増1.25倍）。社会保険料・税金は引かない
+  function payOf(hourly, s) {
+    const h = Number(String(hourly || "").replace(/,/g, "")) || 0;
+    const normalMin = s.workMin - s.otMin;
+    const normal = Math.round(h * normalMin / 60);
+    const overtime = Math.round(h * 1.25 * s.otMin / 60);
+    return { hourly: h, normal, overtime, total: normal + overtime };
+  }
+
+  // LINEに貼り付ける用の文章（記号の装飾なし、1日1行）
+  function toLineText(name, days, ym, hourly) {
+    const s = monthSummary(days, ym);
+    const p = payOf(hourly, s);
+    const [y, m] = ym.split("-").map(Number);
+    const wk = ["日", "月", "火", "水", "木", "金", "土"];
+    const out = [];
+    out.push(`${name || "名前未入力"} ${y}年${m}月分 勤怠`);
+    out.push(`出勤日数 ${s.days}日`);
+    out.push(`労働時間 ${s.hours}時間`);
+    out.push(`時間外 ${s.otHours}時間`);
+    if (p.hourly > 0) {
+      out.push(`時給 ${p.hourly.toLocaleString("ja-JP")}円`);
+      out.push(`所定内 ${p.normal.toLocaleString("ja-JP")}円 ／ 時間外 ${p.overtime.toLocaleString("ja-JP")}円`);
+      out.push(`支給見込み ${p.total.toLocaleString("ja-JP")}円（税金・社会保険料は含みません）`);
+    }
+    if (s.missing.length) {
+      out.push(`未入力の日 ${s.missing.map((d) => Number(d.slice(8)) + "日").join("、")}（出勤か退勤が未入力）`);
+    }
+    out.push("");
+    for (const date of datesOf(ym)) {
+      const d = (days || {})[date] || {};
+      if (!d.in && !d.out) continue;
+      const dd = new Date(date + "T00:00:00");
+      const head = `${dd.getMonth() + 1}/${dd.getDate()}（${wk[dd.getDay()]}）`;
+      if (d.in && d.out) {
+        const r = dayWork(d);
+        const brk = Number(d.brk) > 0 ? ` 休憩${Number(d.brk)}分` : "";
+        out.push(`${head} ${d.in}〜${d.out}${brk} 実働${round2(r.work / 60)}時間`);
+      } else {
+        out.push(`${head} ${d.in ? "出勤 " + d.in : "退勤 " + d.out}（未入力あり）`);
+      }
+    }
+    return out.join("\n");
+  }
+
+  const api = { toMin, dayWork, datesOf, monthSummary, payOf, toCsv, toLineText, STD_MIN };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.AttendanceLogic = api;
 })(typeof window !== "undefined" ? window : globalThis);

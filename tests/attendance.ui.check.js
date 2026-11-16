@@ -64,4 +64,11 @@ assert.strictEqual(w.localStorage.getItem("attendance-v1").includes('"brk":"60"'
 setTime("2026-06-03", "in", "");
 assert.strictEqual(JSON.parse(w.localStorage.getItem("attendance-v1")).days["2026-06-03"], undefined);
 
+// 時給を入れると、支給見込みとLINE用の文章に反映される
+$("hourly").value = "1200";
+$("hourly").dispatchEvent(new w.Event("change"));
+assert.strictEqual(JSON.parse(w.localStorage.getItem("attendance-v1")).hourly, "1200");
+assert.ok($("payTotal").textContent.includes("円"));
+assert.ok($("lineText").value.includes("支給見込み"));
+
 console.log("attendance.ui.check.js: all PASS");

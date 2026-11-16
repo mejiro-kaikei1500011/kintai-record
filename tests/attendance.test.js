@@ -42,6 +42,21 @@ assert.strictEqual(s.hours, 18);
 assert.strictEqual(s.otHours, 2);
 assert.deepStrictEqual(s.missing, ["2026-06-03"]);
 
+// 支給額：時給1200円、所定内18時間−時間外2時間＝16時間 → 19,200円、時間外 2時間×1.25×1200＝3,000円
+const pay = A.payOf("1200", s);
+assert.strictEqual(pay.normal, 19200);
+assert.strictEqual(pay.overtime, 3000);
+assert.strictEqual(pay.total, 22200);
+assert.strictEqual(A.payOf("", s).total, 0);
+
+// LINE用の文章：記号の装飾なし、支給見込みを含む
+const line = A.toLineText("山田 太郎", days, "2026-06", "1200");
+assert.ok(line.startsWith("山田 太郎 2026年6月分 勤怠"));
+assert.ok(line.includes("支給見込み 22,200円"));
+assert.ok(line.includes("6/2（火） 09:00〜20:00 休憩60分 実働10時間"));
+assert.ok(!/[#*|]/.test(line));
+assert.ok(!A.toLineText("", days, "2026-06", "").includes("支給見込み"));
+
 // 日数の数え方（2026年2月は28日まで）
 assert.strictEqual(A.datesOf("2026-02").length, 28);
 assert.strictEqual(A.datesOf("2026-02").slice(-1)[0], "2026-02-28");
