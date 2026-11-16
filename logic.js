@@ -103,7 +103,7 @@
       } else if (d.in || d.out) {
         out.push(`${head} ${d.in ? "出勤 " + d.in : "退勤 " + d.out}（未入力あり）`);
       } else {
-        out.push(head);
+        out.push(`${head} 出勤なし`);
       }
     }
     return out.join("\n");
